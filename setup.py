@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='consensus-fs',
-    version='0.1.0',
+    version='0.1.1',
     description='Ensemble Feature Selection Library',
     author='Ulaş Taylan Met',
     author_email='umet9711@gmail.com',
