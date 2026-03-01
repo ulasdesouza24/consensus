@@ -1,70 +1,65 @@
 # ConsensusFS
 
-> **Tek bir feature selection metoduna güvenme — hepsini çalıştır, en iyisini seç.**
+> **Don't trust a single feature selection method — run them all, pick the best.**
 
-ConsensusFS, makine öğrenmesi projelerinde özellik seçimi (feature selection) için geliştirilmiş bir **ensemble / konsensüs kütüphanesidir**. SHAP, LOFO, Permutation Importance ve Korelasyon gibi farklı metodları **aynı anda paralel** olarak çalıştırır; ardından sonuçları akıllıca birleştirerek güvenilir bir **Meta-Importance skoru** üretir.
+ConsensusFS is an **ensemble / consensus feature selection library** for machine learning projects. It runs SHAP, LOFO, Permutation Importance, and Correlation **in parallel**, then intelligently combines the results to produce a reliable **Meta-Importance score**.
 
-Scikit-Learn uyumludur: `fit`, `transform`, `fit_transform` ve Pipeline desteği ile gelir.
-
----
-
-## 📋 İçindekiler
-
-- [Neden ConsensusFS?](#neden-consensusfs)
-- [Kurulum](#kurulum)
-- [Hızlı Başlangıç](#hızlı-başlangıç)
-- [Nasıl Çalışır?](#nasıl-çalışır)
-- [API Referansı](#api-referansı)
-- [Desteklenen Metodlar](#desteklenen-metodlar)
-- [Aggregation Stratejileri](#aggregation-stratejileri)
-- [Gelişmiş Kullanım](#gelişmiş-kullanım)
-- [Sklearn Pipeline ile Kullanım](#sklearn-pipeline-ile-kullanım)
-- [Görselleştirme](#görselleştirme)
-- [Bağımlılıklar](#bağımlılıklar)
-- [Sık Sorulan Sorular](#sık-sorulan-sorular)
+Fully Scikit-Learn compatible: works with `fit`, `transform`, `fit_transform`, and Pipelines out of the box.
 
 ---
 
-## Neden ConsensusFS?
+## 📋 Table of Contents
 
-Her feature selection metodu farklı bir şeyi ölçer ve farklı zayıf noktaları vardır:
-
-| Metod | Gördüğü Şey | Kör Noktası |
-|-------|------------|------------|
-| Correlation | Lineer ilişkiler | Non-lineer ilişkileri kaçırır |
-| Permutation | Model performansına etkisi | Overfitting modelde yanıltıcı olabilir |
-| SHAP | Her özelliğin tahmine katkısı | Model bağımlıdır |
-| LOFO | CV skoru üzerindeki etkisi | Yavaştır, küçük veride gürültülüdür |
-
-**ConsensusFS** bu metodları bir araya getirerek:
-- Hiçbir metodun körü körüne güven açığına düşmez
-- Birden fazla metodun hemfikir olduğu özellikleri seçer
-- Bireysel metodlara göre daha **kararlı (stable)** ve **güvenilir** sonuçlar üretir
+- [Why ConsensusFS?](#why-consensusfs)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [How It Works](#how-it-works)
+- [API Reference](#api-reference)
+- [Supported Methods](#supported-methods)
+- [Aggregation Strategies](#aggregation-strategies)
+- [Advanced Usage](#advanced-usage)
+- [Sklearn Pipeline Integration](#sklearn-pipeline-integration)
+- [Visualization](#visualization)
+- [Dependencies](#dependencies)
+- [FAQ](#faq)
 
 ---
 
-## Kurulum
+## Why ConsensusFS?
+
+Every feature selection method measures something different — and has different blind spots:
+
+| Method | What It Measures | Weakness |
+|--------|-----------------|----------|
+| Correlation | Linear relationship with target | Misses non-linear relationships |
+| Permutation | Impact on model performance | Can be misleading on overfit models |
+| SHAP | Each feature's contribution to predictions | Model-dependent |
+| LOFO | Effect on CV score when feature is removed | Slow; noisy on small datasets |
+
+**ConsensusFS** combines these methods to:
+- Never fall into any single method's blind spot
+- Select features that multiple methods agree are important
+- Produce more **stable** and **reliable** results than any individual method
+
+---
+
+## Installation
 
 ```bash
-# Repoyu klonlayın ve dizine girin
-git clone https://github.com/kullanici_adi/consensusfs.git
-cd consensusfs
-
-# Yerel olarak kurun
-pip install .
+pip install consensus-fs
 ```
 
-**Tüm bağımlılıkları ayrıca kurmak isterseniz:**
+**To install dependencies separately:**
 
 ```bash
 pip install scikit-learn>=1.0.0 pandas>=1.0.0 numpy>=1.18.0 shap>=0.40.0 lofo-importance>=0.3.0 joblib>=1.0.0 seaborn>=0.11.0 matplotlib>=3.3.0
 ```
 
-> **Python Gereksinimi:** >= 3.8
+> **Python requirement:** >= 3.8
 
 ---
 
-## Hızlı Başlangıç
+## Quick Start
 
 ```python
 import pandas as pd
@@ -72,165 +67,165 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.datasets import make_classification
 from consensusfs import ConsensusSelector
 
-# Veri hazırla
+# Prepare data
 X, y = make_classification(n_samples=500, n_features=20, n_informative=5, random_state=42)
 X_df = pd.DataFrame(X, columns=[f"col_{i}" for i in range(20)])
 
-# Model ve selector tanımla
+# Define model and selector
 model = RandomForestClassifier(n_estimators=100, random_state=42)
 
 selector = ConsensusSelector(
     estimator=model,
-    methods=['correlation', 'permutation', 'shap'],  # kullanılacak metodlar
-    n_features_to_select=10,                          # kaç özellik seçilsin
-    n_jobs=-1                                         # tüm CPU çekirdeklerini kullan
+    methods=['correlation', 'permutation', 'shap'],  # methods to use
+    n_features_to_select=10,                          # how many features to keep
+    n_jobs=-1                                         # use all CPU cores
 )
 
-# Eğit ve dönüştür
+# Fit and transform
 X_selected = selector.fit_transform(X_df, y)
 
-print("Seçilen özellikler:", selector.best_features_)
-print("Yeni boyut:", X_selected.shape)
+print("Selected features:", selector.best_features_)
+print("New shape:", X_selected.shape)
 
-# Sonuçları görselleştir
+# Visualize results
 selector.plot(top_n=10)
 ```
 
 ---
 
-## Nasıl Çalışır?
+## How It Works
 
 ```
-Veri (X, y)
+Data (X, y)
     │
     ▼
 ┌─────────────────────────────────────────────────┐
-│           Paralel Hesaplama (joblib)             │
+│         Parallel Computation (joblib)            │
 │                                                  │
 │  Correlation │ Permutation │  SHAP  │   LOFO    │
-│  (opsiyonel) │ (opsiyonel) │(opsy.) │ (opsy.)  │
+│  (optional)  │ (optional)  │(opt.)  │  (opt.)  │
 └──────┬───────┴──────┬──────┴───┬────┴─────┬─────┘
        │              │          │           │
        └──────────────┴────┬─────┘───────────┘
                            ▼
-              Aggregation (rank_mean / minmax_mean)
-                      + Ağırlıklandırma
+           Aggregation (rank_mean / minmax_mean)
+                    + Weighting
                            │
                            ▼
-                  Meta-Skor Tablosu (importance_df_)
+              Meta-Score Table (importance_df_)
                            │
                            ▼
-                  En İyi N Özellik (best_features_)
+              Best N Features (best_features_)
 ```
 
-### Aggregation Detayı (`rank_mean`)
+### Aggregation Detail (`rank_mean`)
 
-1. Her metod kendi skorunu üretir (örn. SHAP değerleri, korelasyon katsayıları)
-2. Her metod için özellikler **sıralanır** (1 = en önemli, N = en önemsiz)
-3. Her özelliğin tüm sıraların **ağırlıklı ortalaması** alınır → `meta_score`
-4. En düşük `meta_score` → en iyi özellik
+1. Each method produces its own scores (e.g. SHAP values, correlation coefficients)
+2. Features are **ranked** per method (1 = most important, N = least important)
+3. The **weighted average** of all ranks is computed for each feature → `meta_score`
+4. Lowest `meta_score` → best feature
 
 ---
 
-## API Referansı
+## API Reference
 
 ### `ConsensusSelector(estimator, methods, aggregation, n_features_to_select, weights, n_jobs, scoring)`
 
-| Parametre | Tip | Varsayılan | Açıklama |
-|-----------|-----|-----------|----------|
-| `estimator` | sklearn estimator | **Zorunlu** | Kullanılacak ML modeli. SHAP ve Permutation için eğitilir. |
-| `methods` | `list[str]` | `['correlation', 'permutation', 'shap']` | Kullanılacak özellik seçim metodlarının listesi. |
-| `aggregation` | `str` | `'rank_mean'` | Skor birleştirme stratejisi. `'rank_mean'` veya `'minmax_mean'`. |
-| `n_features_to_select` | `int` veya `None` | `None` | Seçilecek özellik sayısı. `None` ise tüm özellikler sıralanır. |
-| `weights` | `dict` veya `None` | `None` | Her metoda verilecek ağırlık. `{'shap': 2.0, 'correlation': 0.5}` gibi. |
-| `n_jobs` | `int` | `-1` | Joblib paralel iş sayısı. `-1` tüm CPU çekirdeklerini kullanır. |
-| `scoring` | `str` | `'roc_auc'` | LOFO metodu için skorlama metriği. |
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `estimator` | sklearn estimator | **Required** | The ML model to use. Will be trained internally for SHAP and Permutation. |
+| `methods` | `list[str]` | `['correlation', 'permutation', 'shap']` | List of feature selection methods to run. |
+| `aggregation` | `str` | `'rank_mean'` | Score combination strategy. Either `'rank_mean'` or `'minmax_mean'`. |
+| `n_features_to_select` | `int` or `None` | `None` | Number of features to select. If `None`, all features are ranked. |
+| `weights` | `dict` or `None` | `None` | Weight per method. e.g. `{'shap': 2.0, 'correlation': 0.5}`. |
+| `n_jobs` | `int` | `-1` | Number of parallel jobs. `-1` uses all CPU cores. |
+| `scoring` | `str` | `'roc_auc'` | Scoring metric used by the LOFO method. |
 
 ---
 
-### Metodlar
+### Methods
 
 #### `fit(X, y) → self`
-Tüm feature selection hesaplamalarını yapar, `importance_df_` ve `best_features_` atributlarını doldurur.
+Runs all feature selection computations and populates `importance_df_` and `best_features_`.
 
-- `X`: `pd.DataFrame` veya `np.ndarray` — girdi özellikleri
-- `y`: `pd.Series` veya `np.ndarray` — hedef değişken
+- `X`: `pd.DataFrame` or `np.ndarray` — input features
+- `y`: `pd.Series` or `np.ndarray` — target variable
 
-#### `transform(X) → pd.DataFrame veya np.ndarray`
-`fit()` ile seçilmiş özellikleri içeren veri setini döndürür.
+#### `transform(X) → pd.DataFrame or np.ndarray`
+Returns the dataset filtered to only the selected features.
 
-- `X`'in tipi korunur: DataFrame girerse DataFrame döner, ndarray girerse ndarray döner.
+- Input type is preserved: DataFrame in → DataFrame out, ndarray in → ndarray out.
 
-#### `fit_transform(X, y) → pd.DataFrame veya np.ndarray`
-`fit(X, y)` ardından `transform(X)` çalıştırır.
+#### `fit_transform(X, y) → pd.DataFrame or np.ndarray`
+Runs `fit(X, y)` followed by `transform(X)`.
 
 #### `plot(top_n=15, title="Consensus Feature Selection Heatmap")`
-En önemli `top_n` özelliği için her metodun verdiği önemi gösteren Isı Haritası çizer.
+Plots a heatmap showing each method's importance score for the top `top_n` features.
 
 ---
 
-### Atributlar (fit() sonrası)
+### Attributes (available after `fit()`)
 
-| Atribut | Tip | Açıklama |
-|---------|-----|----------|
-| `importance_df_` | `pd.DataFrame` | Her metodun ve meta skorun sütun olduğu, özellik sıralı tablo |
-| `best_features_` | `list[str]` | Seçilen en iyi özellik isimleri (sıralanmış) |
-| `feature_names_` | `list[str]` | Eğitim sırasındaki tüm özellik isimleri |
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `importance_df_` | `pd.DataFrame` | Full score table with each method and meta score as columns, sorted best-to-worst |
+| `best_features_` | `list[str]` | Selected feature names in ranked order |
+| `feature_names_` | `list[str]` | All feature names from training data |
 
 ---
 
-## Desteklenen Metodlar
+## Supported Methods
 
 ### `'correlation'`
-Hedef değişken ile her özellik arasındaki **mutlak Pearson korelasyonu** hesaplar. Model gerektirmez, çok hızlıdır. Lineer olmayan ilişkileri kaçırabilir.
+Computes the **absolute Pearson correlation** between each feature and the target. No model required — very fast. May miss non-linear relationships.
 
 ### `'permutation'`
-Scikit-learn'in `permutation_importance` fonksiyonunu kullanır. Her özelliğin değerleri karıştırıldığında model skoru ne kadar düşüyor? Düşüş fazlaysa özellik önemlidir.
+Uses Scikit-learn's `permutation_importance`. Measures how much the model score drops when a feature's values are randomly shuffled. A large drop means the feature is important.
 
 ### `'shap'`
-SHAP (SHapley Additive exPlanations) değerlerini hesaplar. Model tipine göre otomatik olarak doğru Explainer seçilir:
-1. Ağaç tabanlı modeller (XGBoost, LightGBM, RandomForest) → `TreeExplainer`
-2. Doğrusal modeller → `LinearExplainer`
-3. Diğer tüm modeller → `KernelExplainer` (100 örnek ile örnekleme yapılır)
+Computes SHAP (SHapley Additive exPlanations) values. Automatically selects the right explainer based on model type:
+1. Tree-based models (XGBoost, LightGBM, RandomForest) → `TreeExplainer`
+2. Linear models → `LinearExplainer`
+3. All others → `KernelExplainer` (sampled to 100 rows for speed)
 
 ### `'lofo'`
-LOFO (Leave One Feature Out) Importance: Her özellik sırası ile veri setinden çıkarıldığında cross-validation skoru ne kadar değişiyor? En yorumlayıcı ama en yavaş metoddur.
+LOFO (Leave One Feature Out) Importance: measures how much the cross-validation score changes when each feature is removed. The most interpretable method, but the slowest.
 
-> ⚠️ LOFO büyük veri setlerinde uzun sürebilir. `scoring` parametresi ile metriği değiştirebilirsiniz.
+> ⚠️ LOFO can be slow on large datasets. Use the `scoring` parameter to choose an appropriate metric, or exclude it from `methods` if speed is a priority.
 
 ---
 
-## Aggregation Stratejileri
+## Aggregation Strategies
 
-### `rank_mean` (Önerilen)
-Her metodun sıra bilgisi kullanılır. Ölçek farklılıklarından etkilenmez.
+### `rank_mean` (Recommended)
+Uses rank information from each method. Not affected by scale differences between methods.
 
 ```
 meta_score = weighted_average(rank_per_method)
 ```
 
-- **Düşük** `meta_score` → daha iyi özellik
-- Ağırlık verilirse `numpy.average()` ile uygulanır (sıralama bozulmaz)
+- **Lower** `meta_score` → better feature
+- If weights are provided, `numpy.average()` is used (ranking order is preserved)
 
 ### `minmax_mean`
-Ham skorlar 0-1 arasına normalize edilip ortalaması alınır.
+Raw scores are normalized to 0-1 range, then averaged.
 
 ```
 normalized = (score - min) / (max - min)
 meta_score = weighted_average(normalized)
 ```
 
-- **Yüksek** `meta_score` → daha iyi özellik
-- Metodların orijinal skor büyüklükleri önemlidir, aşırı baskın metodlar riski vardır.
+- **Higher** `meta_score` → better feature
+- The original score magnitudes matter; dominant methods may overshadow others.
 
 ---
 
-## Gelişmiş Kullanım
+## Advanced Usage
 
-### Özel Ağırlıklar
+### Custom Weights
 
 ```python
-# SHAP'a daha fazla güven, korelasyona daha az
+# Trust SHAP more, correlation less
 custom_weights = {
     'shap': 2.0,
     'lofo': 1.5,
@@ -246,10 +241,9 @@ selector = ConsensusSelector(
 )
 ```
 
-### Sadece Hızlı Metodlar (LOFO Olmadan)
+### Fast Mode (Without LOFO)
 
 ```python
-# Hızlı çalışma için sadece correlation + shap
 selector = ConsensusSelector(
     estimator=model,
     methods=['correlation', 'shap'],
@@ -259,18 +253,18 @@ selector = ConsensusSelector(
 )
 ```
 
-### Tüm Özellikleri Sıralı Almak
+### Ranking All Features
 
 ```python
-# n_features_to_select=None ile tüm özellikler önem sırasıyla listelenir
+# With n_features_to_select=None, all features are returned in ranked order
 selector = ConsensusSelector(estimator=model)
 selector.fit(X, y)
 
-print(selector.importance_df_)         # Tam skor tablosu
-print(selector.best_features_)         # Tüm özellikler, en iyiden en kötüye
+print(selector.importance_df_)    # Full score table
+print(selector.best_features_)    # All features, best to worst
 ```
 
-### Regresyon Problemleri için
+### Regression Problems
 
 ```python
 from sklearn.ensemble import GradientBoostingRegressor
@@ -280,7 +274,7 @@ model = GradientBoostingRegressor(random_state=42)
 selector = ConsensusSelector(
     estimator=model,
     methods=['correlation', 'permutation', 'shap'],
-    scoring='r2',          # Regresyon için uygun metrik
+    scoring='r2',           # appropriate metric for regression
     n_features_to_select=8
 )
 selector.fit(X_train, y_train)
@@ -288,9 +282,9 @@ selector.fit(X_train, y_train)
 
 ---
 
-## Sklearn Pipeline ile Kullanım
+## Sklearn Pipeline Integration
 
-`ConsensusSelector`, Scikit-Learn Pipeline ile tam uyumludur:
+`ConsensusSelector` is fully compatible with Scikit-Learn Pipelines:
 
 ```python
 from sklearn.pipeline import Pipeline
@@ -298,8 +292,6 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from consensusfs import ConsensusSelector
 
-# Not: Pipeline içinde estimator olarak basit bir model kullanın;
-# Pipeline'ın son adımında farklı bir model kullanabilirsiniz.
 inner_model = RandomForestClassifier(n_estimators=50, random_state=42)
 
 pipe = Pipeline([
@@ -313,66 +305,66 @@ pipe = Pipeline([
 ])
 
 pipe.fit(X_train, y_train)
-print("Test Skoru:", pipe.score(X_test, y_test))
+print("Test Score:", pipe.score(X_test, y_test))
 ```
 
 ---
 
-## Görselleştirme
+## Visualization
 
 ```python
-# fit() çağrısından sonra kullanın
+# Call after fit()
 selector.plot(top_n=15)
 
-# Özel başlıkla
-selector.plot(top_n=10, title="Proje X — Özellik Önem Haritası")
+# With custom title
+selector.plot(top_n=10, title="Project X — Feature Importance Map")
 ```
 
-Isı haritası, her metodun her özelliğe verdiği önemi **0-1 arasında normalize ederek** gösterir. Koyu renk = daha önemli.
+The heatmap shows each method's importance score for each feature, **normalized to 0-1** per column. Darker color = more important.
 
 ---
 
-## Bağımlılıklar
+## Dependencies
 
-| Kütüphane | Minimum Sürüm | Kullanım Amacı |
-|-----------|--------------|----------------|
+| Library | Min Version | Purpose |
+|---------|------------|---------|
 | `scikit-learn` | ≥ 1.0.0 | BaseEstimator, permutation_importance |
-| `pandas` | ≥ 1.0.0 | DataFrame işlemleri |
-| `numpy` | ≥ 1.18.0 | Sayısal hesaplamalar |
-| `shap` | ≥ 0.40.0 | SHAP değerleri |
-| `lofo-importance` | ≥ 0.3.0 | LOFO hesaplaması |
-| `joblib` | ≥ 1.0.0 | Paralel hesaplama |
-| `matplotlib` | ≥ 3.3.0 | Görselleştirme |
-| `seaborn` | ≥ 0.11.0 | Isı haritası |
+| `pandas` | ≥ 1.0.0 | DataFrame operations |
+| `numpy` | ≥ 1.18.0 | Numerical computations |
+| `shap` | ≥ 0.40.0 | SHAP values |
+| `lofo-importance` | ≥ 0.3.0 | LOFO computation |
+| `joblib` | ≥ 1.0.0 | Parallel execution |
+| `matplotlib` | ≥ 3.3.0 | Plotting |
+| `seaborn` | ≥ 0.11.0 | Heatmap rendering |
 
 ---
 
-## Sık Sorulan Sorular
+## FAQ
 
-**LOFO çok yavaş, ne yapmalıyım?**
-`methods` listesinden `'lofo'`'yu çıkarın. Diğer üç metod yeterince güçlüdür.
+**LOFO is too slow. What should I do?**
+Remove `'lofo'` from the `methods` list. The other three methods are strong enough on their own.
 
-**Model olarak ne kullanmalıyım?**
-SHAP için ağaç tabanlı modeller (RandomForest, XGBoost, LightGBM) hem en hızlı hem en doğru sonucu verir. Ancak herhangi bir Scikit-Learn uyumlu model çalışır.
+**Which model should I use as the estimator?**
+Tree-based models (RandomForest, XGBoost, LightGBM) give the fastest and most accurate SHAP results. Any Scikit-Learn compatible estimator will work, however.
 
-**`n_features_to_select` nasıl seçmeliyim?**
-Önce `None` bırakıp `importance_df_`'e bakın; `meta_score`'un belirgin şekilde arttığı nokta iyi bir kesme noktasıdır.
+**How do I choose `n_features_to_select`?**
+Leave it as `None` first and inspect `importance_df_`. A good cutoff is where `meta_score` jumps significantly.
 
-**NumPy array kullanabilir miyim, DataFrame zorunlu mu?**
-Her ikisi de çalışır. NumPy array verildiğinde özellik isimleri otomatik olarak `feature_0`, `feature_1`, ... şeklinde atanır.
+**Can I pass a NumPy array instead of a DataFrame?**
+Yes. Both work. When a NumPy array is passed, feature names are automatically assigned as `feature_0`, `feature_1`, etc.
 
-**`weights` vermediğimde ne olur?**
-Tüm metodlar eşit ağırlıkla (1.0) değerlendirilir; `rank_mean` için basit ortalama sıra hesaplanır.
+**What happens if I don't provide `weights`?**
+All methods are weighted equally (1.0). For `rank_mean`, this means a simple average rank is computed.
 
-**Pipeline'da `fit` edilmiş modeli tekrar eğitiyor mu?**
-Evet. `ConsensusSelector.fit()` her çağrıldığında estimatoru **yeniden eğitir**. Pipeline içinde bu beklenen davranıştır.
-
----
-
-## Lisans
-
-MIT License — Dilediğiniz gibi kullanın, değiştirin ve dağıtın.
+**Does it re-train the model inside `fit()`?**
+Yes. `ConsensusSelector.fit()` always **retrains** the estimator. This is the expected behavior when used inside a Pipeline.
 
 ---
 
-*Geliştirici: **Ulaş Taylan Met** — umet9711@gmail.com*
+## License
+
+MIT License — free to use, modify, and distribute.
+
+---
+
+*Author: **Ulaş Taylan Met** — umet9711@gmail.com*
